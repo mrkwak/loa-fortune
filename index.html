@@ -144,6 +144,10 @@
   }
   footer strong { color: var(--gold-soft); }
 </style>
+<!-- 결과 이미지 캡처용 (빌드 도구 아님, 런타임 CDN) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
+<!-- 카카오 공유 SDK (KAKAO_JS_KEY가 설정됐을 때만 초기화) -->
+<script src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.2/kakao.min.js" crossorigin="anonymous" defer></script>
 </head>
 <body>
 <div class="sky" id="sky" aria-hidden="true"></div>
@@ -165,7 +169,7 @@
   </section>
 
   <section id="result">
-    <div class="card">
+    <div class="card" id="shareCard">
       <div class="res-head">
         <div class="res-date" id="resDate"></div>
         <div class="res-name" id="resName"></div>
@@ -188,6 +192,11 @@
 
       <div class="actions">
         <button id="copyBtn">📋 결과 복사</button>
+        <button id="imgBtn">🖼️ 이미지 저장</button>
+        <button id="shareBtn" style="display:none">🔗 공유</button>
+        <button id="kakaoBtn" style="display:none">💬 카카오톡</button>
+      </div>
+      <div class="actions" style="margin-top:10px">
         <button id="againBtn">다른 닉네임 보기</button>
       </div>
     </div>
@@ -201,6 +210,19 @@
 
 <script>
 "use strict";
+
+/* ---------- 설정 ----------
+   카카오톡 공유를 쓰려면 Kakao Developers에서 발급한 JavaScript 키를 넣으세요.
+   비워두면 카카오톡 버튼은 자동으로 숨겨집니다. (이 키는 공개되어도 되는 클라이언트 키,
+   배포 도메인을 Kakao 콘솔에 등록해야 동작) */
+const KAKAO_JS_KEY = "";
+
+/* HTML escape (직업운 {class} 등 외부 유래 문자열을 innerHTML에 넣기 전 안전 처리) */
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, (c) => (
+    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+  ));
+}
 
 /* ---------- 별 배경 ---------- */
 (function makeStars(){
@@ -399,7 +421,7 @@ function computeCategory(name, dateStr, cat, className) {
   const grade = gradeOf(score);
   let text = pick(rng, TEXT[cat][grade.bucket]);
   if (cat === "직업운") {
-    text = text.replaceAll("{class}", className || "당신의 직업");
+    text = text.replaceAll("{class}", esc(className || "당신의 직업"));
   }
   return { cat, score, grade, text };
 }
@@ -423,6 +445,7 @@ function gaugeSvg(score, bucket) {
 /* ---------- 렌더링 ---------- */
 const $ = (id) => document.getElementById(id);
 let lastResultText = "";
+let lastShare = null;
 
 async function fetchProfile(name) {
   try {
@@ -494,12 +517,18 @@ async function run() {
   $("luckyTime").textContent = luckyTime;
   $("luckyNum").textContent = luckyNum;
 
-  // 복사용 텍스트
+  // 복사/공유용 텍스트
+  const shareName = profile.found ? profile.name : name;
+  const dateLabel = kstMonthDay(now);
   lastResultText = buildShareText({
-    name: profile.found ? profile.name : name,
-    dateLabel: kstMonthDay(now), totalGrade, avgScore, cats,
+    name: shareName, dateLabel, totalGrade, avgScore, cats,
     luckyContent, luckyTime, luckyNum
   });
+  // 카카오 text 템플릿은 200자 제한 → 짧은 버전 별도
+  lastShare = {
+    title: `${dateLabel}의 운세 · ${shareName}`,
+    short: `✦ ${dateLabel}의 운세 · ${shareName}\n총운 ${totalGrade.name} (${avgScore}/100)\n행운: ${luckyContent} / ${luckyTime} / ${luckyNum}`,
+  };
 
   $("result").classList.add("show");
   $("goBtn").disabled = false;
@@ -536,9 +565,88 @@ async function copyResult() {
   }
 }
 
+/* ---------- 이미지 캡처 / 공유 ---------- */
+async function captureCanvas() {
+  return await html2canvas($("shareCard"), {
+    backgroundColor: "#0a0a14",
+    scale: Math.min(2, window.devicePixelRatio || 1.5),
+    useCORS: true,
+    // 버튼 영역은 이미지에서 제외
+    ignoreElements: (el) => el.classList && el.classList.contains("actions"),
+  });
+}
+
+async function saveImage() {
+  if (typeof html2canvas === "undefined") {
+    alert("이미지 변환 모듈을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.");
+    return;
+  }
+  const b = $("imgBtn"); const old = b.textContent; b.disabled = true; b.textContent = "만드는 중…";
+  try {
+    const canvas = await captureCanvas();
+    const a = document.createElement("a");
+    a.download = "로아_오늘의_운세.png";
+    a.href = canvas.toDataURL("image/png");
+    a.click();
+  } catch (e) {
+    alert("이미지 저장에 실패했어요.");
+  } finally {
+    b.disabled = false; b.textContent = old;
+  }
+}
+
+async function shareNative() {
+  const url = location.href;
+  let file = null;
+  // 이미지 파일 공유가 가능하면 결과 이미지를 같이 공유
+  if (typeof html2canvas !== "undefined" && navigator.canShare) {
+    try {
+      const canvas = await captureCanvas();
+      const blob = await new Promise((r) => canvas.toBlob(r, "image/png"));
+      if (blob) {
+        const f = new File([blob], "로아_오늘의_운세.png", { type: "image/png" });
+        if (navigator.canShare({ files: [f] })) file = f;
+      }
+    } catch (_) { /* 이미지 실패 시 텍스트로 */ }
+  }
+  try {
+    if (file) {
+      await navigator.share({ files: [file], title: lastShare?.title || "로아 오늘의 운세", text: lastResultText });
+    } else if (navigator.share) {
+      await navigator.share({ title: lastShare?.title || "로아 오늘의 운세", text: lastResultText, url });
+    } else {
+      copyResult();
+    }
+  } catch (_) { /* 사용자가 공유를 취소한 경우 등은 조용히 무시 */ }
+}
+
+function kakaoShare() {
+  if (!window.Kakao || !window.Kakao.isInitialized?.()) return;
+  Kakao.Share.sendDefault({
+    objectType: "text",
+    text: (lastShare?.short || "로아 오늘의 운세") + "\n\n👉 내 운세도 보기",
+    link: { mobileWebUrl: location.href, webUrl: location.href },
+  });
+}
+
+// 환경에 따라 가능한 공유 버튼만 노출 (Kakao SDK는 defer 로딩이라 load 시점에 확인)
+function initShareButtons() {
+  if (navigator.share) $("shareBtn").style.display = "";
+  if (KAKAO_JS_KEY && window.Kakao) {
+    try {
+      if (!Kakao.isInitialized()) Kakao.init(KAKAO_JS_KEY);
+      $("kakaoBtn").style.display = "";
+    } catch (_) { /* 키가 잘못된 경우 버튼 숨김 유지 */ }
+  }
+}
+window.addEventListener("load", initShareButtons);
+
 $("goBtn").addEventListener("click", run);
 $("nick").addEventListener("keydown", (e) => { if (e.key === "Enter") run(); });
 $("copyBtn").addEventListener("click", copyResult);
+$("imgBtn").addEventListener("click", saveImage);
+$("shareBtn").addEventListener("click", shareNative);
+$("kakaoBtn").addEventListener("click", kakaoShare);
 $("againBtn").addEventListener("click", () => {
   $("result").classList.remove("show");
   $("nick").value = ""; $("nick").focus();
