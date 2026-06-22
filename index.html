@@ -101,8 +101,10 @@
     background: rgba(10,11,28,0.5);
   }
   .total .lbl { color: var(--text-dim); font-size: 13px; letter-spacing: 2px; }
-  .total .grade { font-size: 34px; font-weight: 900; margin: 4px 0; }
-  .total .score { color: var(--text-dim); font-size: 14px; }
+  .total-line { font-size: 20px; font-weight: 700; margin: 6px 0 2px; }
+  .total-line .grade { font-size: 30px; font-weight: 900; }
+  .total .advice { color: var(--text); font-size: 14px; margin: 6px 0 2px; }
+  .total .score { color: var(--text-dim); font-size: 13px; }
 
   .cats { display: grid; grid-template-columns: 1fr; gap: 12px; }
   .cat {
@@ -117,9 +119,6 @@
   .cat-grade { font-weight: 800; font-size: 13px; padding: 1px 8px; border-radius: 999px; border: 1px solid currentColor; }
   .cat-score { color: var(--text-dim); font-size: 12.5px; margin-left: auto; }
   .cat-text { font-size: 14px; color: var(--text); margin-top: 6px; }
-  .g-good { color: var(--good); }
-  .g-mid { color: var(--mid); }
-  .g-bad { color: var(--bad); }
 
   .lucky { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 20px 0; }
   .lucky div {
@@ -178,7 +177,8 @@
 
       <div class="total">
         <div class="lbl">총운</div>
-        <div class="grade" id="totalGrade"></div>
+        <div class="total-line">오늘의 운세는 <span class="grade" id="totalGrade"></span> 등급입니다</div>
+        <div class="advice" id="totalAdvice"></div>
         <div class="score" id="totalScore"></div>
       </div>
 
@@ -283,18 +283,21 @@ function kstMonthDay(d) {
 }
 
 /* ---------- 점수 → 등급 ---------- */
-// 평~길이 흔하고 대흉/대길이 드물게: 균등난수 3개 평균(중앙 편향)
+// 영웅~전설이 흔하고 노말/에스더가 드물게: 균등난수 3개 평균(중앙 편향)
 function score0to100(rng) {
   const avg = (rng() + rng() + rng()) / 3; // 0.5 부근에 집중
   return Math.round(avg * 100);
 }
-// 등급 밴드
+// 로아 장비 등급 밴드 (노말 → 에스더). 색은 인게임 등급 색감.
+// 문구 톤 버킷: bad(노말·희귀) / mid(영웅·전설) / good(유물·고대·에스더)
 function gradeOf(score) {
-  if (score <= 7)  return { name: "대흉", bucket: "bad",  cls: "g-bad" };
-  if (score <= 27) return { name: "흉",   bucket: "bad",  cls: "g-bad" };
-  if (score <= 62) return { name: "평",   bucket: "mid",  cls: "g-mid" };
-  if (score <= 87) return { name: "길",   bucket: "good", cls: "g-good" };
-  return                  { name: "대길", bucket: "good", cls: "g-good" };
+  if (score <= 12) return { name: "노말",   bucket: "bad",  color: "#cfd0db" };
+  if (score <= 32) return { name: "희귀",   bucket: "bad",  color: "#4eb1ff" };
+  if (score <= 58) return { name: "영웅",   bucket: "mid",  color: "#c965e0" };
+  if (score <= 78) return { name: "전설",   bucket: "mid",  color: "#f7a325" };
+  if (score <= 90) return { name: "유물",   bucket: "good", color: "#fa6a32" };
+  if (score <= 97) return { name: "고대",   bucket: "good", color: "#e6d2a8" };
+  return                  { name: "에스더", bucket: "good", color: "#3fe0d0" };
 }
 
 function pick(rng, arr) { return arr[Math.floor(rng() * arr.length)]; }
@@ -304,112 +307,132 @@ function pick(rng, arr) { return arr[Math.floor(rng() * arr.length)]; }
 const TEXT = {
   "재련운": {
     good: [
-      "재련의 별이 환하게 떴습니다. 망설였던 강화, 오늘은 손이 가벼울 거예요.",
-      "장인의 기운이 곁에 머뭅니다. 한 단계 더 도전해볼 만한 날.",
-      "성공의 흐름이 보입니다. 아껴둔 재료를 꺼내도 좋겠어요."
+      "재련각 제대로 섰습니다. 아껴둔 재료 풀어도 좋아요.",
+      "장인이 웃는 날. 상향 한 번 노려볼 만합니다.",
+      "강화 손이 가볍습니다. 오늘은 풀강 도전 가보죠."
     ],
     mid: [
-      "재련운은 평이합니다. 무리한 연속 강화보다 한 번씩 끊어 가세요.",
-      "딱히 좋지도 나쁘지도 않은 흐름. 계획한 만큼만 차분히.",
-      "평범한 날입니다. 기대도 실망도 적당히 내려놓고 두드리세요."
+      "재련운 평타. 무리한 연속 강화 말고 한 방씩 끊어가세요.",
+      "장인 기운 그냥저냥. 계획한 만큼만 두드리고 멈추기.",
+      "딱히 터질 날은 아닙니다. 숨 고르고 안전하게."
     ],
     bad: [
-      "재련의 별이 흐립니다. 큰 강화는 잠시 미뤄두는 게 마음 편해요.",
-      "오늘은 손이 무겁습니다. 재료를 아끼고 다음을 기약하세요.",
-      "역풍이 부는 날. 본전 생각이 커지기 전에 멈추는 게 이득."
+      "오늘은 재련 손 떼세요. 풀강 노리다 본전 다 날립니다.",
+      "재련각 아닙니다. 골드 모아두고 다음 기회를 노리세요.",
+      "12강 가다 11강으로 내려가는 날. 오늘은 참으세요."
     ]
   },
   "품질운": {
     good: [
-      "품질의 여신이 미소 짓습니다. 원하던 수치, 가까이 와 있어요.",
-      "좋은 옵션이 들어올 자리입니다. 한 번 더 굴려볼 만한 날.",
-      "윤기 흐르는 기운. 만족스러운 결과를 손에 쥘 수 있겠어요."
+      "고품질 각입니다. 한 번 더 굴려볼 만해요.",
+      "원하던 수치 코앞입니다. 지금 질러보세요.",
+      "품질 여신 강림. 만족스러운 수치 나옵니다."
     ],
     mid: [
-      "품질운은 무난합니다. 기준선만 넘기자는 마음으로 가볍게.",
-      "평범한 흐름이에요. 욕심을 조금 줄이면 딱 적당한 결과.",
-      "특별할 것 없는 날. 정해둔 횟수까지만 시도해보세요."
+      "품질운 평타. 기준선만 넘기자는 마음으로 가볍게.",
+      "대박은 없어도 무난. 정해둔 횟수까지만 굴리세요.",
+      "그냥저냥한 날. 욕심 줄이면 딱 적당합니다."
     ],
     bad: [
-      "품질의 기운이 가라앉아 있습니다. 오늘은 눈높이를 낮추세요.",
-      "원하는 수치는 멀어 보입니다. 재화를 지키는 게 현명한 날.",
-      "흐린 별자리. 굴릴수록 속만 쓰릴 수 있으니 잠시 쉬어가요."
+      "원하는 수치 안 옵니다. 오늘은 굴리지 마세요.",
+      "품질 갈아엎다 멘탈 갈립니다. 재화 지키세요.",
+      "낮은 수치만 뜨는 날. 눈 딱 감고 다음에."
     ]
   },
   "카드운": {
     good: [
-      "카드의 별이 빛납니다. 노리던 도면, 오늘 만날지도 몰라요.",
-      "수집의 운이 트였습니다. 팩을 열어볼 만한 기운.",
-      "행운의 한 장이 다가옵니다. 세트 완성에 한 발 더."
+      "노리던 도면 들어올 자리. 팩 한 번 열어보죠.",
+      "카드운 트였습니다. 세트 완성에 한 발 더.",
+      "행운의 한 장이 옵니다. 오늘 수집 가보죠."
     ],
     mid: [
-      "카드운은 그저 그렇습니다. 큰 기대 없이 일상 보상만 챙기세요.",
-      "평이한 흐름이에요. 오는 카드에 일희일비하지 않기.",
-      "무난한 날. 도면은 천천히 모아도 충분합니다."
+      "카드운 평타. 일상 보상만 챙기고 기대는 접어두세요.",
+      "오는 카드에 일희일비 안 하기. 천천히 모아도 됩니다.",
+      "무난한 수집운. 세트는 급하지 않아요."
     ],
     bad: [
-      "카드의 기운이 약합니다. 오늘은 중복만 쌓일지 몰라요.",
-      "수집운이 흐립니다. 무리한 구매는 다음으로 미루세요.",
-      "별이 비켜 갑니다. 노리던 도면은 잠시 마음을 비우고."
+      "도면은 없음. 오늘 카드팩은 배만 줍니다.",
+      "노리던 도면 안 나옵니다. 중복만 쌓이는 날.",
+      "카드운 바닥. 팩 열어봐야 속만 쓰립니다."
     ]
   },
   "골드운": {
     good: [
-      "골드의 강물이 당신 쪽으로 흐릅니다. 거래에 좋은 날.",
-      "시세를 보는 눈이 맑아집니다. 내놓은 매물이 잘 풀릴 거예요.",
-      "재물의 별이 떴습니다. 예상보다 두둑한 보상이 따라옵니다."
+      "편린이 나올 거예요. 카던 열심히 가보죠.",
+      "골드 강물이 들어옵니다. 거래 타이밍 좋아요.",
+      "예상보다 두둑한 보상. 시세 보는 눈도 맑은 날."
     ],
     mid: [
-      "골드운은 평범합니다. 큰 베팅보다 꾸준한 수익이 어울리는 날.",
-      "특별한 대박도 손해도 없는 흐름. 하던 대로 차분히.",
-      "무난한 재물운이에요. 충동구매만 조심하면 충분합니다."
+      "골드운 평타. 대박도 손해도 없으니 하던 대로.",
+      "꾸준한 수익이 어울리는 날. 무리한 베팅 금지.",
+      "무난한 재물운. 충동구매만 조심하면 됩니다."
     ],
     bad: [
-      "지갑을 단단히 여미세요. 오늘은 새는 골드가 보이는 날.",
-      "재물의 별이 흐립니다. 큰 거래는 하루 미뤄도 좋아요.",
-      "손이 근질거려도 참는 게 이득. 충동구매를 경계하세요."
+      "지갑 단속하세요. 새는 골드가 보이는 날.",
+      "큰 거래는 미루세요. 손해 보기 딱 좋은 날.",
+      "충동구매 경계. 오늘 지르면 후회합니다."
     ]
   },
   "파티원운": {
     good: [
-      "오늘의 매칭은 든든합니다. 합 좋은 파티원이 곁에 붙을 운.",
-      "트롤을 피해 가는 별자리. 클리어가 매끄럽게 풀릴 거예요.",
-      "좋은 동료의 기운이 강합니다. 내가 잘하면 받쳐주는 날."
+      "오늘 매칭 든든합니다. 합 좋은 파티원 붙어요.",
+      "트롤 피해가는 날. 클리어 매끄럽게 풀립니다.",
+      "좋은 동료 운. 내가 잘하면 받쳐주는 날."
     ],
     mid: [
-      "파티원운은 무난합니다. 핑은 미리, 인사는 먼저 건네 보세요.",
-      "평범한 매칭의 날. 큰 사고도 큰 행운도 적당한 선에서.",
-      "그럭저럭한 합이에요. 기대치를 낮추면 마음이 편합니다."
+      "파티원운 평타. 핑은 미리, 인사는 먼저 건네세요.",
+      "그럭저럭한 합. 기대치 낮추면 마음 편합니다.",
+      "큰 사고도 큰 행운도 없는 날. 무난하게."
     ],
     bad: [
-      "매칭운이 흐립니다. 내가 아무리 잘해도 답답할 수 있는 날.",
-      "트롤의 그림자가 어른거립니다. 가능하면 아는 사람과 함께.",
-      "합이 어긋나기 쉬운 흐름. 한 번 더 양보하면 사고를 줄여요."
+      "오늘 공팟 조심하세요. 트롤 만날 확률 높습니다.",
+      "매칭운 바닥. 내가 잘해도 파티가 말아먹는 날.",
+      "합 안 맞는 날. 가능하면 아는 사람이랑 가세요."
     ]
   },
   // {class} 자리에 조회된 직업명이 치환됨 (없으면 '당신의 직업')
   "직업운": {
     good: [
-      "{class}의 기운이 절정입니다. 손이 평소보다 잘 맞는 하루.",
-      "{class}로서 빛나는 날. 어려운 패턴도 가볍게 넘길 거예요.",
-      "{class}에게 별이 미소 짓습니다. 자신감 있게 밀어붙여 보세요."
+      "{class} 컨디션 최고. 파티 거절율 낮은 날입니다.",
+      "{class} 손이 잘 맞는 날. 어려운 패턴도 가볍게.",
+      "{class}로 빛나는 날. 자신감 있게 밀어붙이세요."
     ],
     mid: [
-      "{class}의 컨디션은 평이합니다. 기본기에 충실하면 충분한 날.",
-      "{class}로서 무난한 흐름. 무리한 욕심만 줄이면 됩니다.",
-      "{class}에게 특별할 것 없는 하루. 평소 루틴대로 가세요."
+      "{class} 평타. 기본기에 충실하면 충분한 날.",
+      "{class} 무난한 흐름. 욕심만 줄이면 됩니다.",
+      "{class} 특별할 것 없는 날. 평소 루틴대로."
     ],
     bad: [
-      "{class}의 기운이 가라앉아 있습니다. 무리한 트라이는 자제하세요.",
-      "{class}로서 손이 꼬이기 쉬운 날. 욕심내지 말고 안전하게.",
-      "{class}에게 역풍이 붑니다. 오늘은 한 발 물러서는 지혜를."
+      "{class} 손 꼬이는 날. 무리한 트라이 자제하세요.",
+      "{class} 컨디션 바닥. 오늘은 안전하게 가세요.",
+      "{class}에게 역풍. 한 발 물러서는 게 이득."
     ]
   }
 };
 
+// 총운 한줄 조언 (등급 버킷별)
+const ADVICE = {
+  good: [
+    "흐름 좋은 날. 미뤄둔 도전 오늘 가보죠.",
+    "기운이 트였습니다. 큰 거 한 방 노려볼 만해요.",
+    "운이 따르는 날. 자신감 있게 밀어붙이세요."
+  ],
+  mid: [
+    "평범한 하루. 하던 대로 꾸준히 가면 됩니다.",
+    "무난한 날. 일일 숙제만 챙겨도 충분해요.",
+    "특별할 것 없는 날. 기대도 실망도 적당히."
+  ],
+  bad: [
+    "오늘은 재련 하지 말고 큰 거 지르지 마세요.",
+    "무리한 도전은 금물. 일일만 돌고 쉬는 날.",
+    "오늘은 욕심 내려놓는 게 이득입니다."
+  ]
+};
+
 const LUCKY_CONTENTS = [
-  "카오스 던전", "가디언 토벌", "군단장 레이드", "어비스 던전", "에포나 의뢰",
-  "필드 보스", "모험 섬", "카오스 게이트", "유령선", "일일 가디언", "쿠르잔 전선"
+  "카오스 던전", "가디언 토벌", "군단장 레이드", "어비스 던전",
+  "필드 보스", "모험 섬", "카오스 게이트", "유령선", "쿠르잔 전선",
+  "큐브", "보스 러시", "엘리트 가디언"
 ];
 
 const CATEGORIES = ["재련운", "품질운", "카드운", "골드운", "파티원운", "직업운"];
@@ -427,8 +450,7 @@ function computeCategory(name, dateStr, cat, className) {
 }
 
 /* ---------- 별자리형 게이지 SVG ---------- */
-function gaugeSvg(score, bucket) {
-  const color = bucket === "good" ? "#7ee0a8" : bucket === "bad" ? "#e08a8a" : "#e6c46a";
+function gaugeSvg(score, color) {
   const r = 26, cx = 32, cy = 32, circ = 2 * Math.PI * r;
   const off = circ * (1 - score / 100);
   return `
@@ -497,16 +519,18 @@ async function run() {
     : "캐릭터 정보를 불러오지 못해 닉네임의 기운만으로 보았어요";
 
   $("totalGrade").textContent = totalGrade.name;
-  $("totalGrade").className = "grade " + totalGrade.cls;
+  $("totalGrade").style.color = totalGrade.color;
+  const advice = pick(rngFrom(`${name}|${dateStr}|advice`), ADVICE[totalGrade.bucket]);
+  $("totalAdvice").textContent = advice;
   $("totalScore").textContent = `종합 점수 ${avgScore} / 100`;
 
   $("cats").innerHTML = cats.map(c => `
     <div class="cat">
-      ${gaugeSvg(c.score, c.grade.bucket)}
+      ${gaugeSvg(c.score, c.grade.color)}
       <div class="cat-body">
         <div class="cat-top">
           <span class="cat-name">${c.cat}</span>
-          <span class="cat-grade ${c.grade.cls}">${c.grade.name}</span>
+          <span class="cat-grade" style="color:${c.grade.color}">${c.grade.name}</span>
           <span class="cat-score">${c.score}점</span>
         </div>
         <div class="cat-text">${c.text}</div>
@@ -521,13 +545,13 @@ async function run() {
   const shareName = profile.found ? profile.name : name;
   const dateLabel = kstMonthDay(now);
   lastResultText = buildShareText({
-    name: shareName, dateLabel, totalGrade, avgScore, cats,
+    name: shareName, dateLabel, totalGrade, avgScore, advice, cats,
     luckyContent, luckyTime, luckyNum
   });
   // 카카오 text 템플릿은 200자 제한 → 짧은 버전 별도
   lastShare = {
     title: `${dateLabel}의 운세 · ${shareName}`,
-    short: `✦ ${dateLabel}의 운세 · ${shareName}\n총운 ${totalGrade.name} (${avgScore}/100)\n행운: ${luckyContent} / ${luckyTime} / ${luckyNum}`,
+    short: `✦ ${dateLabel}의 운세 · ${shareName}\n오늘의 운세는 ${totalGrade.name} 등급 (${avgScore}/100)\n행운: ${luckyContent} / ${luckyTime} / ${luckyNum}`,
   };
 
   $("result").classList.add("show");
@@ -539,7 +563,8 @@ async function run() {
 function buildShareText(d) {
   const lines = [];
   lines.push(`✦ ${d.dateLabel}의 운세 · ${d.name} ✦`);
-  lines.push(`총운: ${d.totalGrade.name} (${d.avgScore}/100)`);
+  lines.push(`오늘의 운세는 ${d.totalGrade.name} 등급 (${d.avgScore}/100)`);
+  lines.push(d.advice);
   lines.push("");
   d.cats.forEach(c => lines.push(`${c.cat} ${c.grade.name}(${c.score}) — ${c.text}`));
   lines.push("");
@@ -653,5 +678,12 @@ $("againBtn").addEventListener("click", () => {
   window.scrollTo({ top: 0, behavior: "smooth" });
 });
 </script>
+
+<!-- Vercel Web Analytics (정적 사이트용). Vercel 대시보드에서 Analytics를 켜야 집계됨.
+     로컬에서는 /_vercel/insights/script.js 가 404여도 무해. -->
+<script>
+  window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+</script>
+<script defer src="/_vercel/insights/script.js"></script>
 </body>
 </html>
