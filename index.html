@@ -499,8 +499,10 @@ async function run() {
   // 6개 카테고리 — 클래스는 시드에 넣지 않는다(직업운 문구 치환에만 사용)
   const cats = CATEGORIES.map(c => computeCategory(name, dateStr, c, className));
 
-  // 총운 = 카테고리 평균
-  const avgScore = Math.round(cats.reduce((s, c) => s + c.score, 0) / cats.length);
+  // 총운 = 카테고리 평균. 단, 6개 평균은 중앙(50)으로 너무 쏠려 늘 '영웅'이 나옴
+  // → 50 기준으로 편차를 다시 펼쳐(상관관계는 유지) 7등급에 골고루 분포시킴
+  const rawAvg = cats.reduce((s, c) => s + c.score, 0) / cats.length;
+  const avgScore = Math.max(0, Math.min(100, Math.round(50 + (rawAvg - 50) * 3.2)));
   const totalGrade = gradeOf(avgScore);
 
   // 행운 요소 (날짜+닉 기반 별도 시드)
